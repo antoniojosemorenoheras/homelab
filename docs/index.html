@@ -1,0 +1,917 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0}</style>
+<title>Homelab de Antonio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Mapa interactivo del homelab: la red de casa, el servidor Proxmox y lo que se ejecuta dentro de cada equipo.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Martian+Mono:wdth,wght@75..112.5,100..800&display=swap">
+<style>
+/* Plano de red: cabecera con migas y panel de puertos del lab, escenario SVG que hace zoom de equipo en equipo, fichas legibles debajo. */
+:root{
+  --bg:#ECEFF2;
+  --paper:#F8FAFB;
+  --ink:#121A23;
+  --mute:#556171;
+  --rule:#C5CDD6;
+  --grid:#E1E6EB;
+  --accent:#2446C4;
+  --accent-soft:#DFE5FA;
+  --ok:#15834A;
+  --plan:#7F8A97;
+  --display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --mono:"Martian Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0D1218; --paper:#131A22; --ink:#E2E7ED; --mute:#8E9AA9; --rule:#2A3441; --grid:#18202A;
+    --accent:#8AA8FF; --accent-soft:#1C2848; --ok:#3BC977; --plan:#6F7A88; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0D1218; --paper:#131A22; --ink:#E2E7ED; --mute:#8E9AA9; --rule:#2A3441; --grid:#18202A;
+  --accent:#8AA8FF; --accent-soft:#1C2848; --ok:#3BC977; --plan:#6F7A88; color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--display);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:14px}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* Cabecera */
+.top{display:flex;flex-wrap:wrap;gap:18px 40px;align-items:flex-end;justify-content:space-between}
+.top>div{min-width:0;flex:1 1 420px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--mute);display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;margin:0 0 8px}
+.crumbs{display:flex;flex-wrap:wrap;gap:2px 8px;align-items:center}
+.crumbs button{background:none;border:0;padding:2px 0;cursor:pointer;color:var(--accent);font:inherit;letter-spacing:inherit;text-transform:inherit}
+.crumbs button:hover{text-decoration:underline}
+.crumbs [aria-current]{color:var(--ink)}
+h1{font-family:var(--display);font-stretch:116%;font-weight:640;font-size:clamp(26px,3.4vw,40px);line-height:1.08;letter-spacing:-.012em;margin:0;text-wrap:balance}
+.lede{margin:10px 0 0;color:var(--mute);max-width:66ch;text-wrap:pretty}
+
+.estado{display:grid;gap:8px;justify-items:start}
+.estado h2{font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--mute);margin:0;font-weight:500}
+.puertos{display:grid;grid-template-columns:repeat(17,12px);gap:5px 4px;padding:9px 10px;border:1px solid var(--rule);border-radius:6px;background:var(--paper)}
+.puerto{width:12px;height:9px;border-radius:2px;border:1.5px solid var(--plan)}
+.puerto.on{background:var(--ok);border-color:var(--ok)}
+.cuenta{font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums;color:var(--mute);margin:0}
+.cuenta b{color:var(--ink);font-weight:600}
+.interruptor{display:inline-flex;gap:10px;align-items:center;cursor:pointer;font-size:14px;user-select:none}
+.interruptor input{appearance:none;-webkit-appearance:none;width:36px;height:20px;border-radius:999px;border:1.5px solid var(--rule);background:var(--paper);position:relative;cursor:pointer;margin:0;flex:none;transition:background-color .15s,border-color .15s}
+.interruptor input::after{content:"";position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:var(--plan);transition:transform .18s}
+.interruptor input:checked{background:var(--accent);border-color:var(--accent)}
+.interruptor input:checked::after{transform:translateX(16px);background:var(--paper)}
+
+/* Escenario */
+.stage{position:relative;background:var(--paper);border:1px solid var(--rule);border-radius:10px;overflow:hidden}
+.stage svg{display:block;width:100%;height:auto;aspect-ratio:1200/680;max-height:74vh}
+.aviso{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,calc(100% - 32px));margin:0;background:var(--paper);border:1.5px dashed var(--plan);border-radius:8px;padding:14px 16px;text-align:center;font-size:14px}
+
+/* Mandos */
+.mandos{display:flex;flex-wrap:wrap;gap:10px 12px;align-items:center}
+.btn{background:var(--paper);border:1px solid var(--rule);border-radius:7px;padding:7px 12px;cursor:pointer;font-size:14px;display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+.btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:default}
+.pestanas{position:relative;display:flex;gap:4px;overflow-x:auto;min-width:0;flex:1 1 320px;padding:2px}
+.pestana{flex:0 0 auto;background:none;border:1px solid transparent;border-radius:999px;padding:5px 11px;cursor:pointer;font-size:13px;display:inline-flex;gap:7px;align-items:center;color:var(--mute);white-space:nowrap}
+.pestana:hover{color:var(--ink);border-color:var(--rule)}
+.pestana[aria-current="true"]{color:var(--ink);border-color:var(--ink);background:var(--paper)}
+.lado{display:flex;gap:8px}
+.led{display:inline-block;width:8px;height:8px;border-radius:50%;border:1.5px solid var(--plan);flex:none}
+.led.on{background:var(--ok);border-color:var(--ok)}
+
+.leyenda{display:flex;flex-wrap:wrap;gap:6px 22px;font-size:13px;color:var(--mute);align-items:center;margin:0;padding:0;list-style:none}
+.leyenda li{display:inline-flex;gap:8px;align-items:center}
+.leyenda svg{width:34px;height:10px;overflow:visible;flex:none}
+.leyenda b{color:var(--accent);font-family:var(--mono)}
+
+/* Fichas */
+.fichas-cab{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:4px 12px;margin:10px 0 10px}
+.fichas-cab h2{font-size:17px;font-stretch:108%;font-weight:620;margin:0}
+.fichas{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,262px),1fr));gap:12px;margin:0;padding:0;list-style:none}
+.ficha{background:var(--paper);border:1px solid var(--rule);border-radius:9px;padding:13px 15px 14px;display:grid;gap:6px;align-content:start;min-width:0;transition:border-color .2s,box-shadow .2s}
+.ficha.plan{border-style:dashed;border-color:var(--plan)}
+.ficha.hl{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.ficha header{display:flex;gap:9px;align-items:center}
+.ficha h3{font-size:15px;font-weight:620;margin:0;min-width:0;flex:1;line-height:1.25}
+.chip{font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;padding:2px 7px;border-radius:999px;border:1px solid var(--ok);color:var(--ok);white-space:nowrap}
+.chip.p{border-color:var(--plan);color:var(--mute);border-style:dashed}
+.tag{font-family:var(--mono);font-stretch:90%;font-size:11.5px;color:var(--mute);margin:0;overflow-wrap:anywhere}
+.ficha ul{margin:2px 0 0;padding-left:17px;font-size:13.5px;display:grid;gap:3px}
+.entrar{justify-self:start;margin-top:4px;background:none;border:0;padding:0;color:var(--accent);cursor:pointer;font-size:13.5px;font-weight:560}
+.entrar:hover{text-decoration:underline}
+.pie{font-size:12.5px;color:var(--mute);margin:8px 0 0}
+
+/* Dibujo SVG */
+.layer{transform-box:view-box}
+.zone rect{fill:none;stroke:var(--rule);stroke-width:1.5}
+.zone.fuera rect{stroke-dasharray:1 6;stroke-linecap:round;stroke-width:2}
+.zone.aislada rect{stroke:var(--ink);stroke-opacity:.45;stroke-dasharray:2 5;stroke-linecap:round}
+.zone.plan rect{stroke-dasharray:8 6}
+.zone text{font-family:var(--mono);font-size:11.5px;letter-spacing:1.4px;fill:var(--mute)}
+.node .caja{fill:var(--paper);stroke:var(--ink);stroke-width:1.6}
+.node.plan .caja{stroke:var(--plan);stroke-dasharray:6 5}
+.node.ref .caja{stroke:var(--rule);stroke-dasharray:2 4;stroke-width:1.4}
+.node .ico{color:var(--ink)}
+.node.plan .ico,.node.ref .ico,.node.nube .ico{color:var(--mute)}
+.node .nom{font-family:var(--display);font-weight:620;fill:var(--ink)}
+.node.plan .nom,.node.ref .nom{fill:var(--mute)}
+.node .tg{font-family:var(--mono);font-stretch:87.5%;fill:var(--mute)}
+.node .sb{font-family:var(--display);fill:var(--mute)}
+.node .ledsvg{fill:var(--ok);stroke:var(--ok);stroke-width:1.5}
+.node.plan .ledsvg{fill:none;stroke:var(--plan)}
+.node .flecha{fill:var(--accent);font-family:var(--mono);font-size:17px;font-weight:600}
+.node.go{cursor:pointer}
+.node.go:focus{outline:none}
+.node.go:hover .caja,.node.go:focus-visible .caja{stroke:var(--accent);fill:var(--accent-soft)}
+.node.go:focus-visible .caja{stroke-width:2.8}
+.node.hl .caja{stroke:var(--accent);stroke-width:2.6}
+.ln{fill:none;stroke:var(--ink);stroke-width:2;stroke-linejoin:round}
+.ln.plan{stroke:var(--plan);stroke-dasharray:7 6}
+.lnlab{font-family:var(--mono);font-stretch:87.5%;font-size:12px;fill:var(--mute);paint-order:stroke;stroke:var(--paper);stroke-width:7px;stroke-linejoin:round}
+.bus{stroke:var(--ink);stroke-width:7;stroke-linecap:round}
+.bus.plan{stroke:var(--plan);stroke-dasharray:14 9;stroke-linecap:butt}
+.buslab{font-family:var(--mono);font-size:12.5px;fill:var(--ink)}
+.buslab.plan{fill:var(--mute)}
+.flow{fill:none;stroke:var(--accent);stroke-width:3.2;stroke-linecap:round;stroke-dasharray:.1 16;animation:flujo 1.1s linear infinite}
+.flow.plan{stroke:var(--plan)}
+@keyframes flujo{to{stroke-dashoffset:-16.1}}
+.nota .rayita{stroke:var(--accent);stroke-width:2}
+.nota text{font-family:var(--display);font-size:14px;fill:var(--ink)}
+.nota .nt-t{font-weight:650}
+.muro rect{fill:url(#rayado);stroke:var(--ink);stroke-width:1.2;stroke-opacity:.6}
+.muro text{font-family:var(--mono);font-size:11.5px;fill:var(--mute)}
+
+/* Solo lo que funciona hoy */
+body.solo-real .plan{display:none!important}
+
+@media (prefers-reduced-motion: reduce){
+  .flow{animation:none;stroke-dasharray:none;opacity:.35}
+  .interruptor input,.interruptor input::after,.ficha{transition:none}
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow"><span>Homelab</span><span aria-hidden="true">/</span><nav class="crumbs" id="migas" aria-label="Ruta"></nav></div>
+      <h1 id="titulo">La red de casa</h1>
+      <p class="lede" id="sub"></p>
+    </div>
+    <section class="estado" aria-labelledby="estado-t">
+      <h2 id="estado-t">Estado del lab</h2>
+      <div class="puertos" id="puertos" role="img"></div>
+      <p class="cuenta" id="cuenta"></p>
+      <label class="interruptor" for="ver-plan"><input type="checkbox" id="ver-plan" checked> Mostrar lo planificado</label>
+    </section>
+  </header>
+
+  <div class="stage">
+    <svg id="lienzo" viewBox="0 0 1200 680" role="group" aria-label="Diagrama del homelab">
+      <defs id="defs"></defs>
+      <rect width="1200" height="680" fill="url(#cuadricula)"/>
+      <g id="capas"></g>
+    </svg>
+    <p class="aviso" id="aviso" hidden>Esta parte todavía no está montada. Activa «Mostrar lo planificado» para ver cómo será.</p>
+  </div>
+
+  <div class="mandos">
+    <button class="btn" id="atras" type="button">← <span id="atras-txt">Vista general</span></button>
+    <nav class="pestanas" id="pestanas" aria-label="Vistas"></nav>
+    <div class="lado">
+      <button class="btn" id="ant" type="button" aria-label="Vista anterior">←</button>
+      <button class="btn" id="sig" type="button">Siguiente →</button>
+    </div>
+  </div>
+
+  <ul class="leyenda">
+    <li><svg viewBox="0 0 34 10" aria-hidden="true"><line x1="0" y1="5" x2="34" y2="5" style="stroke:var(--ink)" stroke-width="2"/></svg>Funciona hoy</li>
+    <li><svg viewBox="0 0 34 10" aria-hidden="true"><line x1="0" y1="5" x2="34" y2="5" style="stroke:var(--plan)" stroke-width="2" stroke-dasharray="7 6"/></svg>Planificado</li>
+    <li><span class="led on"></span>Pieza en marcha</li>
+    <li><span class="led"></span>Pieza por montar</li>
+    <li>Pulsa un equipo con <b>›</b> para ver qué tiene dentro</li>
+  </ul>
+
+  <section aria-labelledby="fichas-t">
+    <div class="fichas-cab"><h2 id="fichas-t">Piezas de esta vista</h2><span class="cuenta" id="fichas-n"></span></div>
+    <ul class="fichas" id="fichas"></ul>
+  </section>
+
+  <p class="pie" id="pie"></p>
+</div>
+
+<script>
+/* ==================================================================
+   DATOS DEL HOMELAB
+   Cuando montes algo, cambia  estado: "plan"  por  estado: "ok"
+   en el nodo, enlace, zona o nota correspondiente. Nada más.
+   Lienzo de 1200 × 680. Cada nodo mide 236 × 72 salvo que diga w / h.
+   ================================================================== */
+const LAB = {
+  actualizado: "6 de noviembre de 2026",
+  escenas: [
+
+    /* ---------------------------------------------------------- CASA */
+    {
+      id: "casa", padre: null, nombre: "Red de casa", estado: "ok",
+      titulo: "La red de casa",
+      sub: "Todo cuelga del router del operador y de un switch TP-Link. Pulsa un equipo para ver qué se ejecuta dentro.",
+      zonas: [
+        { x: 40, y: 22, w: 1120, h: 124, etiqueta: "Fuera de casa", estilo: "fuera" },
+        { x: 40, y: 172, w: 1120, h: 486, etiqueta: "Casa · 192.168.1.0/24", estilo: "casa" }
+      ],
+      nodos: [
+        { id: "internet", tipo: "nube", x: 600, y: 80, nombre: "Internet" },
+        { id: "macbook", x: 300, y: 80, icono: "laptop", nombre: "MacBook Air", tag: "cliente remoto", sub: "Entra a casa desde fuera", estado: "ok", entra: "acceso-remoto",
+          fic: ["Portátil de uso diario", "Desde fuera de casa entrará a la red por VPN"] },
+        { id: "router", x: 600, y: 236, icono: "router", nombre: "Router del operador", tag: "puerta de enlace", sub: "Salida a Internet y wifi", estado: "ok",
+          fic: ["Salida a Internet de toda la casa", "Puerta de enlace de 192.168.1.0/24"] },
+        { id: "firewall", x: 940, y: 236, icono: "tower", nombre: "Torre antigua", tag: "fw-pruebas", sub: "Firewall para practicar", estado: "plan", entra: "firewall",
+          fic: ["Pentium 4 Prescott, 512 MB DDR400, HDD 80 GB", "Montará un segmento de pruebas aparte", "No va en medio de la red de casa"] },
+        { id: "switch", x: 600, y: 400, icono: "switch", nombre: "Switch TP-Link", tag: "switch de casa", sub: "Reparte el cable", estado: "ok",
+          fic: ["Conecta por cable el Lenovo y pve-lab"] },
+        { id: "lenovo", x: 270, y: 560, icono: "laptop", nombre: "Lenovo", tag: "equipo de trabajo", sub: "8 GB DDR4 · 256 GB", estado: "ok",
+          fic: ["Portátil con el que hago las tareas de ASIR", "8 GB de RAM DDR4 y 256 GB de disco"] },
+        { id: "pve-lab", x: 600, y: 560, icono: "server", nombre: "EliteDesk SFF", tag: "pve-lab · 192.168.1.27", sub: "Proxmox VE 9.2", estado: "ok", entra: "pve-lab",
+          fic: ["HP EliteDesk SFF de segunda mano", "Proxmox VE 9.2 sobre un SSD de 1 TB", "Se enciende con Wake on LAN"] },
+        { id: "srv-familia", x: 930, y: 560, icono: "tower", nombre: "Servidor familiar", tag: "srv-familia", sub: "Torre con RAID 1", estado: "plan", entra: "servidor-familiar",
+          fic: ["Torre grande con bahías de 3,5\" de sobra", "Fotos, archivos y contraseñas de la casa", "Encendido de 7:00 a 23:00"] }
+      ],
+      enlaces: [
+        { de: "internet", a: "router", estado: "ok" },
+        { de: "macbook", a: "internet", estado: "plan", etiqueta: "túnel WireGuard", flujo: true },
+        { de: "router", a: "switch", estado: "ok" },
+        { de: "router", a: "firewall", estado: "plan" },
+        { de: "switch", a: "lenovo", estado: "ok" },
+        { de: "switch", a: "pve-lab", estado: "ok" },
+        { de: "switch", a: "srv-familia", estado: "plan" }
+      ]
+    },
+
+    /* ------------------------------------------------------- PVE-LAB */
+    {
+      id: "pve-lab", padre: "casa", nombre: "pve-lab", estado: "ok",
+      titulo: "Dentro de pve-lab",
+      sub: "El EliteDesk corre Proxmox VE 9.2. Hoy tiene una VM Ubuntu conectada a la red de casa; lo demás es lo que voy a ir montando.",
+      zonas: [
+        { x: 40, y: 92, w: 1120, h: 566, etiqueta: "pve-lab · Proxmox VE 9.2 · i5-4590 · 16 GB DDR3 · SSD 1 TB", estilo: "host" }
+      ],
+      nodos: [
+        { id: "ref-switch", ref: true, x: 600, y: 42, h: 60, w: 220, icono: "switch", nombre: "Red de casa", tag: "switch TP-Link", entra: "casa" },
+        { id: "vmbr0", tipo: "bus", x1: 110, x2: 1090, y: 196, nombre: "vmbr0 · puente a la red de casa", estado: "ok",
+          fic: ["Puente de Proxmox que conecta las VMs a la red de casa"] },
+        { id: "vm-ubuntu", x: 200, y: 306, icono: "vm", nombre: "VM Ubuntu", tag: "en vmbr0", sub: "La única VM de hoy", estado: "ok", entra: "vm-ubuntu",
+          fic: ["Ubuntu en una máquina virtual de Proxmox", "Base para la web, el SSH y las copias"] },
+        { id: "lxc-copias", x: 466, y: 306, icono: "lxc", nombre: "Servidor de copias", tag: "lxc · copias", sub: "Recibe copias por SSH", estado: "plan", entra: "copias",
+          fic: ["Contenedor LXC que guarda las copias", "Usuario dedicado sin shell y clave restringida"] },
+        { id: "lxc-wg", x: 732, y: 306, icono: "key", nombre: "VPN WireGuard", tag: "lxc · wg", sub: "Entrada desde fuera", estado: "plan", entra: "acceso-remoto",
+          fic: ["Único punto de entrada desde Internet", "La consola de Proxmox solo se ve por la VPN"] },
+        { id: "lxc-monitor", x: 998, y: 306, icono: "chart", nombre: "Monitorización", tag: "lxc · monitor", sub: "Panel TUI propio", estado: "plan",
+          fic: ["Mi panel de monitorización, reescrito por mí", "CPU, RAM, disco y estado de los servicios"] },
+        { id: "vmbr1", tipo: "bus", x1: 380, x2: 820, y: 456, nombre: "vmbr1 · red aislada", estado: "plan",
+          fic: ["Puente sin puerto físico: no tiene salida a casa"] },
+        { id: "lab-aislado", x: 600, y: 566, icono: "target", nombre: "Lab de pentesting", tag: "kali + objetivos", sub: "Sin salida a casa", estado: "plan", entra: "lab-aislado", cuenta: false,
+          fic: ["Kali y máquinas vulnerables en vmbr1", "Para preparar el eJPT sin riesgo para casa"] },
+        { id: "ssd-1tb", x: 186, y: 566, icono: "disk", nombre: "SSD 1 TB", tag: "disco interno", sub: "Sistema, VMs y LXC", estado: "ok",
+          fic: ["Proxmox y los discos de las VMs viven aquí"] },
+        { id: "hdd-usb", x: 1014, y: 566, icono: "usb", nombre: "HDD USB 2 TB", tag: "almacén de copias", sub: "Destino de vzdump", estado: "plan",
+          fic: ["Disco externo para las copias de VMs y LXC", "Segundo soporte de la regla 3-2-1"] }
+      ],
+      extras: [
+        { id: "wol", nombre: "Wake on LAN", tag: "paquete mágico", estado: "ok",
+          fic: ["Enciendo pve-lab desde el móvil", "De momento solo dentro de casa"] }
+      ],
+      enlaces: [
+        { de: "ref-switch", a: "vmbr0", estado: "ok", etiqueta: "puerto físico" },
+        { de: "vm-ubuntu", a: "vmbr0", estado: "ok" },
+        { de: "lxc-copias", a: "vmbr0", estado: "plan" },
+        { de: "lxc-wg", a: "vmbr0", estado: "plan" },
+        { de: "lxc-monitor", a: "vmbr0", estado: "plan" },
+        { de: "lab-aislado", a: "vmbr1", estado: "plan" }
+      ],
+      notas: [
+        { x: 856, y: 430, estado: "plan", lineas: ["vmbr1 no tiene puerto físico:", "lo que pasa ahí no sale a casa."] }
+      ]
+    },
+
+    /* ----------------------------------------------------- VM UBUNTU */
+    {
+      id: "vm-ubuntu", padre: "pve-lab", nombre: "VM Ubuntu", estado: "ok",
+      titulo: "Dentro de la VM Ubuntu",
+      sub: "De momento es la VM base. Encima irán la web con Nginx, el acceso por SSH con claves y el script de copias.",
+      zonas: [
+        { x: 40, y: 40, w: 830, h: 618, etiqueta: "VM Ubuntu · conectada a vmbr0", estilo: "vm" }
+      ],
+      nodos: [
+        { id: "vm-ubuntu", x: 455, y: 146, icono: "vm", nombre: "Ubuntu", tag: "sistema base", sub: "VM en pve-lab", estado: "ok",
+          fic: ["La máquina virtual que ya está creada"] },
+        { id: "nginx", x: 190, y: 330, w: 250, icono: "globe", nombre: "Nginx", tag: ":80 sitio A · :8080 sitio B", sub: "Dos webs por puerto", estado: "plan",
+          fic: ["Dos sitios en el mismo servidor, uno por puerto", "Lo mismo que hice en la práctica de SRI"] },
+        { id: "openssh", x: 455, y: 330, icono: "terminal", nombre: "OpenSSH", tag: ":22", sub: "Solo con claves, sin root", estado: "plan",
+          fic: ["Acceso por clave pública, sin contraseña", "PermitRootLogin no"] },
+        { id: "ufw", x: 725, y: 330, icono: "shield", nombre: "UFW", tag: "cortafuegos del host", sub: "Solo 22, 80 y 8080", estado: "plan",
+          fic: ["Política por defecto: denegar la entrada", "Abre solo 22, 80 y 8080"] },
+        { id: "timer", x: 185, y: 534, icono: "clock", nombre: "Timer de systemd", tag: "backup.timer", sub: "Diaria · Persistent=true", estado: "plan",
+          fic: ["Lanza la copia una vez al día", "Si pve-lab estaba apagado, la copia se hace al encender (cron se la saltaría)"] },
+        { id: "backup-sh", x: 455, y: 534, icono: "script", nombre: "backup.sh", tag: "tar.gz con fecha", sub: "Log de errores · sha256", estado: "plan", entra: "copias",
+          fic: ["Comprime los datos con fecha y hora en el nombre", "Registra lo que hace y los errores", "Calcula el sha256 para verificar la copia"] },
+        { id: "ref-copias", ref: true, x: 1010, y: 534, icono: "lxc", nombre: "Servidor de copias", tag: "lxc · copias", estado: "plan", entra: "copias" }
+      ],
+      enlaces: [
+        { de: "vm-ubuntu", a: "nginx", estado: "plan" },
+        { de: "vm-ubuntu", a: "openssh", estado: "plan" },
+        { de: "vm-ubuntu", a: "ufw", estado: "plan" },
+        { de: "timer", a: "backup-sh", estado: "plan" },
+        { de: "backup-sh", a: "ref-copias", estado: "plan", etiqueta: "SSH · clave restringida", flujo: true }
+      ],
+      notas: [
+        { x: 904, y: 120, estado: "plan", titulo: "Siguiente paso", lineas: ["Nginx con los dos virtual hosts", "de la práctica de SRI."] }
+      ]
+    },
+
+    /* -------------------------------------------------------- COPIAS */
+    {
+      id: "copias", padre: "pve-lab", nombre: "Copias", estado: "plan",
+      titulo: "Cómo viaja una copia de seguridad",
+      sub: "La práctica de copias de clase, montada en casa: tar y SSH para los archivos, vzdump para las máquinas enteras y una restauración que se prueba de verdad.",
+      zonas: [
+        { x: 40, y: 470, w: 1120, h: 188, etiqueta: "Regla 3-2-1", estilo: "fuera", estado: "plan" }
+      ],
+      nodos: [
+        { id: "vm-ubuntu", x: 150, y: 140, w: 228, icono: "vm", nombre: "VM Ubuntu", tag: "origen", sub: "Carpeta de datos", estado: "ok", entra: "vm-ubuntu",
+          fic: ["Los datos que hay que proteger"] },
+        { id: "backup-sh", x: 450, y: 140, w: 228, icono: "script", nombre: "backup.sh", tag: "tar.gz + sha256", sub: "Nombre con fecha y hora", estado: "plan",
+          fic: ["Copia comprimida con la fecha en el nombre", "Registro de ejecución y de errores"] },
+        { id: "lxc-copias", x: 750, y: 140, w: 228, icono: "lxc", nombre: "Servidor de copias", tag: "lxc · copias", sub: "Usuario backup, sin shell", estado: "plan",
+          fic: ["Recibe las copias por SSH", "La clave solo sirve para dejar archivos"] },
+        { id: "hdd-usb", x: 1050, y: 140, w: 228, icono: "usb", nombre: "HDD USB 2 TB", tag: "vzdump semanal", sub: "Segundo soporte", estado: "plan",
+          fic: ["Copia completa de VMs y LXC", "Otro disco: sobrevive si muere el SSD"] },
+        { id: "restaurar", x: 450, y: 330, w: 228, icono: "restore", nombre: "restaurar.sh", tag: "prueba semanal", sub: "Extrae y compara", estado: "plan",
+          fic: ["Descarga la última copia y la extrae aparte", "Compara los archivos con el original", "Una copia que no se ha restaurado no cuenta"] },
+        { id: "offsite", x: 1050, y: 330, w: 228, icono: "lock", nombre: "Copia fuera de casa", tag: "cifrada con GPG", sub: "La tercera copia", estado: "plan",
+          fic: ["Se cifra con GPG antes de salir de casa", "Protege de un robo o un incendio"] }
+      ],
+      extras: [
+        { id: "retencion", nombre: "Retención", tag: "7 diarias · 4 semanales", estado: "plan",
+          fic: ["El script borra las copias que caducan", "Así el disco no se llena"] }
+      ],
+      enlaces: [
+        { de: "vm-ubuntu", a: "backup-sh", estado: "plan", etiqueta: "tar.gz", flujo: true },
+        { de: "backup-sh", a: "lxc-copias", estado: "plan", etiqueta: "SSH", flujo: true },
+        { de: "lxc-copias", a: "hdd-usb", estado: "plan", etiqueta: "vzdump", flujo: true },
+        { de: "hdd-usb", a: "offsite", estado: "plan", etiqueta: "cifrado GPG", flujo: true },
+        { de: "lxc-copias", a: "restaurar", estado: "plan", etiqueta: "descarga" },
+        { de: "restaurar", a: "vm-ubuntu", estado: "plan", etiqueta: "compara", ruta: "hv" }
+      ],
+      notas: [
+        { x: 612, y: 312, estado: "plan", titulo: "Ojo", lineas: ["La VM y las copias comparten SSD:", "eso salva de un borrado, no de una", "avería del disco. Por eso el HDD."] },
+        { x: 64, y: 530, estado: "plan", titulo: "3 copias", lineas: ["El original, la del servidor de", "copias y la de fuera de casa."] },
+        { x: 444, y: 530, estado: "plan", titulo: "2 soportes", lineas: ["El SSD de pve-lab y el HDD USB."] },
+        { x: 824, y: 530, estado: "plan", titulo: "1 fuera de casa", lineas: ["Cifrada con GPG antes de salir."] }
+      ]
+    },
+
+    /* --------------------------------------------------- LAB AISLADO */
+    {
+      id: "lab-aislado", padre: "pve-lab", nombre: "Lab aislado", estado: "plan",
+      titulo: "Laboratorio de pentesting aislado",
+      sub: "Kali y las máquinas vulnerables en su propia red. Nada de lo que pase aquí puede llegar a los equipos de casa.",
+      zonas: [
+        { x: 40, y: 40, w: 760, h: 618, etiqueta: "vmbr1 · 10.10.10.0/24 · sin puerto físico", estilo: "aislada", estado: "plan" },
+        { x: 900, y: 40, w: 260, h: 618, etiqueta: "Red de casa", estilo: "casa" }
+      ],
+      muros: [
+        { x: 850, y1: 70, y2: 628, etiqueta: "sin ruta", estado: "plan" }
+      ],
+      nodos: [
+        { id: "vmbr1", tipo: "bus", x1: 110, x2: 730, y: 340, nombre: "vmbr1", estado: "plan",
+          fic: ["Puente sin puerto físico: no tiene salida a casa"] },
+        { id: "kali", x: 420, y: 186, icono: "terminal", nombre: "Kali Linux", tag: "vm · atacante", sub: "Herramientas del eJPT", estado: "plan",
+          fic: ["Kali como VM dentro de Proxmox", "Para practicar lo que pide el eJPT"] },
+        { id: "metasploitable", x: 236, y: 494, icono: "target", nombre: "Metasploitable 2", tag: "vm · objetivo", sub: "Servicios vulnerables", estado: "plan",
+          fic: ["Máquina hecha para ser atacada", "FTP, SSH, Samba y webs con fallos conocidos"] },
+        { id: "dvwa", x: 604, y: 494, icono: "globe", nombre: "DVWA", tag: "docker · objetivo", sub: "Web con SQLi y XSS", estado: "plan",
+          fic: ["Aplicación web vulnerable en Docker", "Para practicar inyección SQL y XSS"] },
+        { id: "ref-casa", ref: true, x: 1030, y: 340, w: 220, icono: "home", nombre: "Lenovo, pve-lab…", tag: "192.168.1.0/24", entra: "casa" }
+      ],
+      enlaces: [
+        { de: "kali", a: "vmbr1", estado: "plan" },
+        { de: "metasploitable", a: "vmbr1", estado: "plan" },
+        { de: "dvwa", a: "vmbr1", estado: "plan" }
+      ],
+      notas: [
+        { x: 72, y: 598, estado: "plan", lineas: ["Lo que practique aquí acaba en writeups", "de máquinas retiradas en el repositorio."] }
+      ]
+    },
+
+    /* ------------------------------------------------ ACCESO REMOTO */
+    {
+      id: "acceso-remoto", padre: "casa", nombre: "Acceso remoto", estado: "plan",
+      titulo: "Entrar en casa desde fuera",
+      sub: "El MacBook se conectará por WireGuard a un contenedor de pve-lab. La consola de Proxmox nunca se abre a Internet: solo se llega a ella por la VPN.",
+      zonas: [
+        { x: 40, y: 40, w: 330, h: 618, etiqueta: "Fuera de casa", estilo: "fuera" },
+        { x: 600, y: 40, w: 560, h: 618, etiqueta: "Casa · 192.168.1.0/24", estilo: "casa" }
+      ],
+      nodos: [
+        { id: "macbook", x: 205, y: 170, icono: "laptop", nombre: "MacBook Air", tag: "cliente WireGuard", sub: "Desde el instituto", estado: "ok",
+          fic: ["El portátil que me llevo fuera", "Tendrá su propia clave de WireGuard"] },
+        { id: "internet", tipo: "nube", x: 485, y: 170, nombre: "Internet" },
+        { id: "ref-router", ref: true, x: 760, y: 170, icono: "router", nombre: "Router del operador", tag: "reenvía un puerto UDP", entra: "casa" },
+        { id: "lxc-wg", x: 760, y: 380, icono: "key", nombre: "VPN WireGuard", tag: "lxc · wg en pve-lab", sub: "Único punto de entrada", estado: "plan",
+          fic: ["Contenedor LXC con WireGuard", "Solo se abre un puerto UDP en el router"] },
+        { id: "ref-pve", ref: true, x: 760, y: 572, icono: "server", nombre: "pve-lab", tag: "consola :8006", entra: "pve-lab" }
+      ],
+      enlaces: [
+        { de: "macbook", a: "internet", estado: "plan", etiqueta: "túnel", flujo: true },
+        { de: "internet", a: "ref-router", estado: "ok" },
+        { de: "ref-router", a: "lxc-wg", estado: "plan", etiqueta: "UDP 51820", flujo: true },
+        { de: "lxc-wg", a: "ref-pve", estado: "plan", etiqueta: "acceso a la LAN" }
+      ],
+      notas: [
+        { x: 906, y: 300, estado: "plan", titulo: "Por resolver", lineas: ["Si pve-lab está apagado", "no hay VPN, y sin VPN no", "puedo despertarlo desde", "fuera con Wake on LAN."] },
+        { x: 72, y: 300, estado: "plan", lineas: ["La IP pública de casa", "no sale en este mapa."] }
+      ]
+    },
+
+    /* ----------------------------------------------------- FIREWALL */
+    {
+      id: "firewall", padre: "casa", nombre: "Firewall", estado: "plan",
+      titulo: "Firewall de pruebas en la torre antigua",
+      sub: "Quiero aprender reglas de firewall con hardware real. Como solo se enciende para practicar, va en un segmento aparte y no en medio de la red de casa.",
+      zonas: [
+        { x: 40, y: 40, w: 1120, h: 240, etiqueta: "Red de casa · sigue igual", estilo: "casa" },
+        { x: 40, y: 320, w: 1120, h: 338, etiqueta: "Segmento de pruebas", estilo: "aislada", estado: "plan" }
+      ],
+      nodos: [
+        { id: "ref-router2", ref: true, x: 300, y: 160, icono: "router", nombre: "Router del operador", tag: "192.168.1.0/24", entra: "casa" },
+        { id: "ref-switch2", ref: true, x: 800, y: 160, icono: "switch", nombre: "Switch TP-Link", tag: "resto de la casa", entra: "casa" },
+        { id: "firewall", x: 300, y: 450, icono: "tower", nombre: "Torre antigua", tag: "fw-pruebas", sub: "Pentium 4 · 512 MB", estado: "plan",
+          fic: ["Pentium 4 Prescott, 512 MB DDR400, HDD 80 GB", "Primer intento con IPFire (32 bits): no salió", "Se enciende solo para practicar reglas"] },
+        { id: "lan-pruebas", x: 800, y: 450, icono: "laptop", nombre: "Equipo de pruebas", tag: "LAN del firewall", sub: "El Lenovo por cable", estado: "plan",
+          fic: ["Un equipo detrás del firewall para probar reglas", "Puede ser el Lenovo conectado por cable"] }
+      ],
+      extras: [
+        { id: "nic2", nombre: "Segunda tarjeta de red", tag: "WAN + LAN", estado: "plan",
+          fic: ["Un firewall necesita dos interfaces: WAN y LAN"] }
+      ],
+      enlaces: [
+        { de: "ref-router2", a: "ref-switch2", estado: "ok" },
+        { de: "ref-router2", a: "firewall", estado: "plan", etiqueta: "WAN" },
+        { de: "firewall", a: "lan-pruebas", estado: "plan", etiqueta: "LAN de pruebas" }
+      ],
+      notas: [
+        { x: 72, y: 574, estado: "plan", lineas: ["Primer intento con IPFire de 32 bits", "en este hardware: no salió."] },
+        { x: 592, y: 574, estado: "plan", lineas: ["Le falta una segunda tarjeta de red:", "una para la WAN y otra para la LAN."] }
+      ]
+    },
+
+    /* ---------------------------------------------- SERVIDOR FAMILIAR */
+    {
+      id: "servidor-familiar", padre: "casa", nombre: "Servidor familiar", estado: "plan",
+      titulo: "Servidor familiar",
+      sub: "Una torre aparte del laboratorio, estable, para lo que no puede romperse: las fotos y los archivos de la familia y las contraseñas de la casa.",
+      zonas: [
+        { x: 40, y: 92, w: 1120, h: 566, etiqueta: "srv-familia · encendido de 7:00 a 23:00", estilo: "host", estado: "plan" }
+      ],
+      nodos: [
+        { id: "ref-switch3", ref: true, x: 600, y: 42, h: 60, w: 220, icono: "switch", nombre: "Red de casa", tag: "switch TP-Link", entra: "casa" },
+        { id: "srv-familia", x: 600, y: 196, icono: "tower", nombre: "Torre grande", tag: "srv-familia", sub: "Bahías de 3,5\" de sobra", estado: "plan",
+          fic: ["Separado del laboratorio para que sea estable", "Placa con muchos puertos SATA"] },
+        { id: "ssd-sistema", x: 230, y: 380, icono: "disk", nombre: "SSD de sistema", tag: "solo el SO", sub: "Separado de los datos", estado: "plan",
+          fic: ["El sistema va en su propio disco"] },
+        { id: "raid1", x: 600, y: 380, icono: "raid", nombre: "RAID 1", tag: "2 HDD en espejo", sub: "Aquí viven los datos", estado: "plan",
+          fic: ["Si muere un disco, el otro sigue funcionando"] },
+        { id: "hdd-usb", x: 970, y: 380, icono: "usb", nombre: "HDD USB 2 TB", tag: "copia mensual", sub: "Se desconecta después", estado: "plan",
+          fic: ["Copia mensual de los datos de la familia"] },
+        { id: "nube", x: 415, y: 570, icono: "photos", nombre: "Nube familiar", tag: "fotos y archivos", sub: "Software por decidir", estado: "plan",
+          fic: ["Fotos y documentos importantes de la casa"] },
+        { id: "gestor", x: 785, y: 570, icono: "key", nombre: "Gestor de contraseñas", tag: "para toda la casa", sub: "Software por decidir", estado: "plan",
+          fic: ["Un gestor compartido para toda la familia"] }
+      ],
+      enlaces: [
+        { de: "ref-switch3", a: "srv-familia", estado: "plan" },
+        { de: "srv-familia", a: "ssd-sistema", estado: "plan" },
+        { de: "srv-familia", a: "raid1", estado: "plan" },
+        { de: "srv-familia", a: "hdd-usb", estado: "plan", etiqueta: "mensual" },
+        { de: "raid1", a: "nube", estado: "plan" },
+        { de: "raid1", a: "gestor", estado: "plan" }
+      ],
+      notas: [
+        { x: 930, y: 528, estado: "plan", titulo: "RAID 1 no es una copia", lineas: ["Si borro un archivo,", "desaparece de los dos", "discos a la vez."] },
+        { x: 64, y: 528, estado: "plan", lineas: ["Fuera del laboratorio:", "aquí no se prueba nada."] }
+      ]
+    }
+  ]
+};
+
+/* ==================================================================
+   DIBUJO Y NAVEGACIÓN (no hace falta tocar nada de aquí abajo)
+   ================================================================== */
+(() => {
+  const NS = "http://www.w3.org/2000/svg";
+  const ICONOS = {
+    router: '<rect x="4" y="16" width="24" height="9" rx="2"/><path d="M9.5 16 8 8M22.5 16 24 8"/><path d="M9 20.5h.01M13 20.5h.01"/>',
+    switch: '<rect x="3" y="10" width="26" height="12" rx="2"/><path d="M7 16h2M11.5 16h2M16 16h2M20.5 16h2"/><path d="M25 16h.01"/>',
+    laptop: '<rect x="7" y="7" width="18" height="13" rx="1.5"/><path d="M4 25h24l-2.5-5h-19z"/>',
+    server: '<rect x="6" y="4" width="20" height="24" rx="2"/><path d="M10 9h12M10 13h12"/><circle cx="16" cy="22" r="1.8"/>',
+    tower: '<rect x="9" y="3" width="14" height="26" rx="1.5"/><path d="M12 8h8M12 11.5h8"/><circle cx="16" cy="23" r="1.6"/>',
+    cloud: '<path d="M9.5 24h13.5a5.5 5.5 0 0 0 .9-10.9A7.5 7.5 0 0 0 9.6 12.4 5.8 5.8 0 0 0 9.5 24z"/>',
+    vm: '<rect x="4" y="9" width="20" height="16" rx="2"/><path d="M4 13.5h20"/><path d="M8 5h17a3 3 0 0 1 3 3v13"/>',
+    lxc: '<path d="M16 4 27 9.5v13L16 28 5 22.5v-13z"/><path d="M5 9.5 16 15l11-5.5M16 15v13"/>',
+    disk: '<rect x="5" y="6" width="22" height="20" rx="2"/><circle cx="16" cy="15" r="5"/><path d="M16 15h.01M9 22.5h3"/>',
+    raid: '<rect x="4" y="5" width="15" height="12" rx="1.5"/><rect x="13" y="15" width="15" height="12" rx="1.5"/><path d="M7.5 13h3M16.5 23h3"/>',
+    usb: '<rect x="8" y="11" width="16" height="17" rx="2"/><path d="M12 11V5h8v6M14 8h.01M18 8h.01M12 23h8"/>',
+    shield: '<path d="M16 4 26 8v7c0 6.5-4.2 10.8-10 13-5.8-2.2-10-6.5-10-13V8z"/><path d="m12 16 3 3 5-6"/>',
+    key: '<circle cx="10.5" cy="16" r="5.5"/><path d="M16 16h12M24 16v4.5M28 16v3"/>',
+    terminal: '<rect x="4" y="6" width="24" height="20" rx="2"/><path d="m9 13 4 3-4 3M15.5 20h7"/>',
+    globe: '<circle cx="16" cy="16" r="11.5"/><path d="M4.5 16h23M16 4.5c3.8 3.2 3.8 19.8 0 23M16 4.5c-3.8 3.2-3.8 19.8 0 23"/>',
+    target: '<circle cx="16" cy="16" r="11.5"/><circle cx="16" cy="16" r="6.5"/><circle cx="16" cy="16" r="1.6"/>',
+    clock: '<circle cx="16" cy="16" r="11.5"/><path d="M16 9.5V16l4.5 3"/>',
+    script: '<path d="M8 4h11l6 6v18H8z"/><path d="M19 4v6h6M13.5 16.5l-2.5 2.5 2.5 2.5M18.5 16.5l2.5 2.5-2.5 2.5"/>',
+    lock: '<rect x="7" y="14" width="18" height="14" rx="2"/><path d="M11 14v-3.5a5 5 0 0 1 10 0V14M16 19.5v3"/>',
+    restore: '<path d="M7.5 12.5A9.5 9.5 0 1 1 7 20"/><path d="M7 5.5v7h7"/>',
+    chart: '<path d="M4 27h24M8 23v-7M13.5 23V10M19 23v-9M24.5 23V6"/>',
+    photos: '<rect x="4" y="7" width="24" height="18" rx="2"/><circle cx="11" cy="13" r="2"/><path d="m4 22 7-6 5 4.5 3.5-3 8.5 6.5"/>',
+    home: '<path d="M4.5 15 16 5.5 27.5 15M8 12.5V27h16V12.5"/><path d="M13.5 27v-7h5v7"/>'
+  };
+
+  const $ = id => document.getElementById(id);
+  const esPlan = o => o && o.estado === "plan";
+  const cls = (...c) => c.filter(Boolean).join(" ");
+  const reducido = () => window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function el(tag, attrs, parent, text) {
+    const e = document.createElementNS(NS, tag);
+    if (attrs) for (const k in attrs) if (attrs[k] !== undefined && attrs[k] !== null && attrs[k] !== false) e.setAttribute(k, attrs[k]);
+    if (text !== undefined) e.textContent = text;
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+
+  /* Patrones e iconos */
+  let defs = '<pattern id="cuadricula" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" style="stroke:var(--grid)" stroke-width="1"/></pattern>'
+    + '<pattern id="rayado" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="7" height="7" style="fill:var(--paper)"/><line x1="0" y1="0" x2="0" y2="7" style="stroke:var(--mute)" stroke-width="2.6"/></pattern>';
+  for (const k in ICONOS) defs += `<symbol id="i-${k}" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${ICONOS[k]}</symbol>`;
+  $("defs").innerHTML = defs;
+
+  /* Escenas y tamaños por defecto */
+  const ESC = {};
+  LAB.escenas.forEach(e => {
+    ESC[e.id] = e;
+    e.nodos.forEach(n => {
+      if (n.tipo === "nube") { n.w = n.w || 120; n.h = n.h || 84; }
+      else if (n.tipo !== "bus") { n.w = n.w || 236; n.h = n.h || 72; }
+    });
+  });
+  const ORDEN = LAB.escenas.map(e => e.id);
+
+  /* Recorrido de un enlace entre dos nodos */
+  function ruta(a, b, l) {
+    if (b.tipo === "bus" || a.tipo === "bus") {
+      const n = a.tipo === "bus" ? b : a, bus = a.tipo === "bus" ? a : b;
+      const y1 = n.y < bus.y ? n.y + n.h / 2 : n.y - n.h / 2;
+      return { d: `M${n.x} ${y1}V${bus.y}`, m: [n.x, (y1 + bus.y) / 2] };
+    }
+    const dx = b.x - a.x, dy = b.y - a.y;
+    if (l.ruta === "hv") {
+      const x1 = a.x + (Math.sign(dx) || 1) * a.w / 2, y2 = b.y - (Math.sign(dy) || 1) * b.h / 2;
+      return { d: `M${x1} ${a.y}H${b.x}V${y2}`, m: [(x1 + b.x) / 2, a.y] };
+    }
+    if (Math.abs(dy) > 1 && Math.abs(dy) >= Math.abs(dx) * 0.6) {
+      const s = Math.sign(dy), y1 = a.y + s * a.h / 2, y2 = b.y - s * b.h / 2;
+      if (Math.abs(dx) < 1) return { d: `M${a.x} ${y1}V${y2}`, m: [a.x, (y1 + y2) / 2] };
+      const my = (y1 + y2) / 2;
+      return { d: `M${a.x} ${y1}V${my}H${b.x}V${y2}`, m: [(a.x + b.x) / 2, my] };
+    }
+    const s = Math.sign(dx) || 1, x1 = a.x + s * a.w / 2, x2 = b.x - s * b.w / 2;
+    if (Math.abs(dy) < 1) return { d: `M${x1} ${a.y}H${x2}`, m: [(x1 + x2) / 2, a.y] };
+    const mx = (x1 + x2) / 2;
+    return { d: `M${x1} ${a.y}H${mx}V${b.y}H${x2}`, m: [mx, (a.y + b.y) / 2] };
+  }
+
+  function nodo(n, parent) {
+    const go = !!n.entra;
+    const g = el("g", {
+      class: cls("node", n.ref && "ref", n.tipo === "nube" && "nube", esPlan(n) && "plan", go && "go"),
+      "data-id": n.id, transform: `translate(${n.x} ${n.y})`
+    }, parent);
+    if (go) {
+      g.setAttribute("tabindex", "0");
+      g.setAttribute("role", "button");
+      g.setAttribute("aria-label", `Ir a ${ESC[n.entra] ? ESC[n.entra].nombre : n.nombre}`);
+      g.dataset.entra = n.entra;
+    }
+    if (n.tipo === "nube") {
+      el("use", { href: "#i-cloud", class: "ico", x: -28, y: -42, width: 56, height: 56 }, g);
+      el("text", { class: "nom", x: 0, y: 30, "text-anchor": "middle", "font-size": 15 }, g, n.nombre);
+      return g;
+    }
+    const W = n.w, H = n.h, x0 = -W / 2, max = W - 78;
+    el("rect", { class: "caja", x: x0, y: -H / 2, width: W, height: H, rx: 8 }, g);
+    el("use", { href: `#i-${n.icono}`, class: "ico", x: x0 + 12, y: -15, width: 30, height: 30 }, g);
+    const filas = [["nom", n.nombre, 15]];
+    if (n.tag) filas.push(["tg", n.tag, 11.5]);
+    if (n.sub) filas.push(["sb", n.sub, 12.5]);
+    const base = { 1: [5], 2: [-3, 14], 3: [-11, 6, 23] }[filas.length];
+    filas.forEach(([c, t, fs], i) => el("text", { class: c, x: x0 + 52, y: base[i], "font-size": fs, "data-max": max }, g, t));
+    if (!n.ref) el("circle", { class: "ledsvg", cx: W / 2 - 14, cy: -H / 2 + 14, r: 5 }, g);
+    if (go) el("text", { class: "flecha", x: W / 2 - 14, y: H / 2 - 9, "text-anchor": "middle" }, g, "›");
+    return g;
+  }
+
+  function nota(nt, parent) {
+    const g = el("g", { class: cls("nota", esPlan(nt) && "plan") }, parent);
+    const filas = (nt.titulo ? [nt.titulo] : []).concat(nt.lineas || []);
+    el("line", { class: "rayita", x1: nt.x, y1: nt.y - 13, x2: nt.x, y2: nt.y - 13 + filas.length * 18 + 1 }, g);
+    const t = el("text", { x: nt.x + 12, y: nt.y }, g);
+    filas.forEach((f, i) => el("tspan", { x: nt.x + 12, dy: i ? 18 : 0, class: i === 0 && nt.titulo ? "nt-t" : null }, t, f));
+  }
+
+  function dibujar(esc) {
+    const g = el("g", { class: "layer", "data-id": esc.id, hidden: "" }, $("capas"));
+    const porId = {};
+    esc.nodos.forEach(n => { porId[n.id] = n; });
+    (esc.zonas || []).forEach(z => {
+      const zg = el("g", { class: cls("zone", z.estilo, esPlan(z) && "plan") }, g);
+      el("rect", { x: z.x, y: z.y, width: z.w, height: z.h, rx: 14 }, zg);
+      el("text", { x: z.x + 16, y: z.y + 24 }, zg, z.etiqueta.toUpperCase());
+    });
+    (esc.muros || []).forEach(m => {
+      const mg = el("g", { class: cls("muro", esPlan(m) && "plan") }, g);
+      el("rect", { x: m.x - 8, y: m.y1, width: 16, height: m.y2 - m.y1, rx: 3 }, mg);
+      el("text", { x: m.x, y: m.y2 + 18, "text-anchor": "middle" }, mg, m.etiqueta);
+    });
+    esc.nodos.filter(n => n.tipo === "bus").forEach(b => {
+      el("line", { class: cls("bus", esPlan(b) && "plan"), x1: b.x1, y1: b.y, x2: b.x2, y2: b.y }, g);
+      el("text", { class: cls("buslab", esPlan(b) && "plan"), x: b.x1, y: b.y - 14 }, g, b.nombre);
+    });
+    const gl = el("g", null, g), gf = el("g", null, g), ge = el("g", null, g);
+    (esc.enlaces || []).forEach(l => {
+      const a = porId[l.de], b = porId[l.a];
+      if (!a || !b) return;
+      const r = ruta(a, b, l), p = esPlan(l);
+      el("path", { class: cls("ln", p && "plan"), d: r.d }, gl);
+      if (l.flujo) el("path", { class: cls("flow", p && "plan"), d: r.d }, gf);
+      if (l.etiqueta) el("text", { class: cls("lnlab", p && "plan"), x: r.m[0], y: r.m[1] + 4, "text-anchor": "middle" }, ge, l.etiqueta);
+    });
+    esc.nodos.filter(n => n.tipo !== "bus").forEach(n => nodo(n, g));
+    (esc.notas || []).forEach(nt => nota(nt, g));
+    return g;
+  }
+
+  const capas = {};
+  LAB.escenas.forEach(e => { capas[e.id] = dibujar(e); });
+
+  /* Encoge el texto que no cabe en su caja */
+  function ajustar(L) {
+    L.querySelectorAll("text[data-max]").forEach(t => {
+      const max = +t.dataset.max;
+      let fs = +(t.dataset.fs || t.getAttribute("font-size"));
+      t.dataset.fs = fs;
+      t.setAttribute("font-size", fs);
+      try {
+        let i = 0;
+        while (t.getComputedTextLength() > max && fs > 9 && i++ < 24) { fs -= 0.5; t.setAttribute("font-size", fs); }
+      } catch (e) { /* sin medida disponible */ }
+    });
+  }
+
+  /* Panel de puertos: una luz por pieza */
+  const piezas = new Map();
+  LAB.escenas.forEach(e => e.nodos.concat(e.extras || []).forEach(n => {
+    if (n.ref || n.tipo === "nube" || n.cuenta === false || piezas.has(n.id)) return;
+    piezas.set(n.id, n);
+  }));
+  const todas = [...piezas.values()];
+  const nOk = todas.filter(n => !esPlan(n)).length, nPlan = todas.length - nOk;
+  todas.sort((a, b) => esPlan(a) - esPlan(b)).forEach(n => {
+    const s = document.createElement("span");
+    s.className = "puerto" + (esPlan(n) ? "" : " on");
+    s.title = `${n.nombre}: ${esPlan(n) ? "planificado" : "en marcha"}`;
+    $("puertos").appendChild(s);
+  });
+  $("puertos").setAttribute("aria-label", `${nOk} piezas en marcha y ${nPlan} planificadas`);
+  $("cuenta").innerHTML = `<b>${nOk}</b> en marcha · <b>${nPlan}</b> planificadas`;
+  $("pie").textContent = `Actualizado el ${LAB.actualizado}. Lo dibujado en discontinuo todavía no está montado: cuando funcione, pasa a línea continua.`;
+
+  /* Pestañas */
+  const pest = $("pestanas");
+  LAB.escenas.forEach(e => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "pestana" + (esPlan(e) ? " plan" : "");
+    b.dataset.id = e.id;
+    b.innerHTML = `<span class="led${esPlan(e) ? "" : " on"}"></span>`;
+    b.append(e.nombre);
+    b.addEventListener("click", () => ir(e.id));
+    pest.appendChild(b);
+  });
+
+  /* Estado */
+  let actual = null, enCurso = [], verPlan = true;
+  try { if (localStorage.getItem("homelab-ver-plan") === "0") verPlan = false; } catch (e) { /* sin almacenamiento */ }
+  const chk = $("ver-plan");
+  chk.checked = verPlan;
+  document.body.classList.toggle("solo-real", !verPlan);
+  chk.addEventListener("change", () => {
+    verPlan = chk.checked;
+    document.body.classList.toggle("solo-real", !verPlan);
+    try { localStorage.setItem("homelab-ver-plan", verPlan ? "1" : "0"); } catch (e) { /* sin almacenamiento */ }
+    if (actual) { ajustar(capas[actual]); interfaz(ESC[actual]); }
+  });
+
+  function marcar(id, on) {
+    if (!actual) return;
+    capas[actual].querySelectorAll(`.node[data-id="${id}"]`).forEach(n => n.classList.toggle("hl", on));
+  }
+  function destacarFicha(id) {
+    const li = $("fichas").querySelector(`.ficha[data-id="${id}"]`);
+    if (!li) return;
+    li.classList.add("hl");
+    li.scrollIntoView({ block: "nearest", behavior: reducido() ? "auto" : "smooth" });
+    setTimeout(() => li.classList.remove("hl"), 1400);
+  }
+
+  function pintarFichas(esc) {
+    const ul = $("fichas");
+    ul.textContent = "";
+    const items = esc.nodos.filter(n => !n.ref && n.tipo !== "nube").concat(esc.extras || []);
+    let vis = 0;
+    items.forEach(n => {
+      const p = esPlan(n);
+      if (!p || verPlan) vis++;
+      const li = document.createElement("li");
+      li.className = "ficha" + (p ? " plan" : "");
+      li.dataset.id = n.id;
+      const h = document.createElement("header");
+      h.innerHTML = `<span class="led${p ? "" : " on"}"></span>`;
+      const h3 = document.createElement("h3");
+      h3.textContent = n.nombre;
+      const chip = document.createElement("span");
+      chip.className = "chip" + (p ? " p" : "");
+      chip.textContent = p ? "Planificado" : "En marcha";
+      h.append(h3, chip);
+      li.appendChild(h);
+      if (n.tag) {
+        const t = document.createElement("p");
+        t.className = "tag";
+        t.textContent = n.tag;
+        li.appendChild(t);
+      }
+      const lineas = n.fic || (n.sub ? [n.sub] : []);
+      if (lineas.length) {
+        const lu = document.createElement("ul");
+        lineas.forEach(x => { const i = document.createElement("li"); i.textContent = x; lu.appendChild(i); });
+        li.appendChild(lu);
+      }
+      if (n.entra && ESC[n.entra] && n.entra !== esc.id) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "entrar";
+        b.textContent = `Ir a ${ESC[n.entra].nombre} →`;
+        b.addEventListener("click", () => ir(n.entra));
+        li.appendChild(b);
+      }
+      li.addEventListener("mouseenter", () => marcar(n.id, true));
+      li.addEventListener("mouseleave", () => marcar(n.id, false));
+      ul.appendChild(li);
+    });
+    $("fichas-n").textContent = `${vis} ${vis === 1 ? "pieza" : "piezas"}`;
+  }
+
+  function visibles() {
+    return ORDEN.filter(i => verPlan || !esPlan(ESC[i]) || i === actual);
+  }
+
+  function interfaz(esc) {
+    $("titulo").textContent = esc.titulo;
+    $("sub").textContent = esc.sub;
+    const cadena = [];
+    for (let e = esc; e; e = e.padre ? ESC[e.padre] : null) cadena.unshift(e);
+    const migas = $("migas");
+    migas.textContent = "";
+    cadena.forEach((e, i) => {
+      if (i) { const s = document.createElement("span"); s.setAttribute("aria-hidden", "true"); s.textContent = "›"; migas.appendChild(s); }
+      if (i === cadena.length - 1) {
+        const s = document.createElement("span");
+        s.setAttribute("aria-current", "page");
+        s.textContent = e.nombre;
+        migas.appendChild(s);
+      } else {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = e.nombre;
+        b.addEventListener("click", () => ir(e.id));
+        migas.appendChild(b);
+      }
+    });
+    pest.querySelectorAll(".pestana").forEach(b => b.setAttribute("aria-current", b.dataset.id === esc.id ? "true" : "false"));
+    const activa = pest.querySelector(`[data-id="${esc.id}"]`);
+    if (activa && pest.scrollWidth > pest.clientWidth) {
+      const left = activa.offsetLeft - (pest.clientWidth - activa.offsetWidth) / 2;
+      try { pest.scrollTo({ left, behavior: reducido() ? "auto" : "smooth" }); } catch (e) { pest.scrollLeft = left; }
+    }
+    if (esc.padre) { $("atras").disabled = false; $("atras-txt").textContent = `Volver a ${ESC[esc.padre].nombre}`; }
+    else { $("atras").disabled = true; $("atras-txt").textContent = "Vista general"; }
+    const v = visibles(), k = v.indexOf(esc.id);
+    $("ant").disabled = k <= 0;
+    $("sig").disabled = k >= v.length - 1;
+    $("aviso").hidden = verPlan || !esPlan(esc);
+    pintarFichas(esc);
+  }
+
+  function puerta(esc, hijo) {
+    const n = esc.nodos.find(x => x.entra === hijo && !x.ref) || esc.nodos.find(x => x.entra === hijo);
+    return n ? [n.x, n.y] : [600, 340];
+  }
+
+  function mostrar(id, inicial) {
+    const to = ESC[id];
+    if (!to || id === actual) return;
+    /* Cancelar (no terminar): terminar una animación ya cancelada la reactiva
+       con fill "forwards" y deja la capa invisible. */
+    enCurso.forEach(a => { try { a.cancel(); } catch (e) { /* ya cancelada */ } });
+    enCurso = [];
+    for (const k in capas) if (k !== id && k !== actual) capas[k].setAttribute("hidden", "");
+    const from = actual ? ESC[actual] : null;
+    const Lto = capas[id], Lfrom = from ? capas[from.id] : null;
+    actual = id;
+    Lto.removeAttribute("hidden");
+    ajustar(Lto);
+    interfaz(to);
+    if (!Lfrom) return;
+    const ocultar = () => { if (actual !== from.id) Lfrom.setAttribute("hidden", ""); };
+    if (inicial || reducido() || !Lfrom.animate) { ocultar(); return; }
+    let modo = "fundido", o = [600, 340];
+    if (to.padre === from.id) { modo = "dentro"; o = puerta(from, to.id); }
+    else if (from.padre === to.id) { modo = "fuera"; o = puerta(to, from.id); }
+    const origen = `${o[0]}px ${o[1]}px`;
+    Lfrom.style.transformOrigin = origen;
+    Lto.style.transformOrigin = origen;
+    const G = 2.6, P = 0.3;
+    const K = {
+      dentro: [[{ transform: "scale(1)", opacity: 1 }, { transform: `scale(${G})`, opacity: 0 }],
+               [{ transform: `scale(${P})`, opacity: 0 }, { transform: "scale(1)", opacity: 1 }]],
+      fuera: [[{ transform: "scale(1)", opacity: 1 }, { transform: `scale(${P})`, opacity: 0 }],
+              [{ transform: `scale(${G})`, opacity: 0 }, { transform: "scale(1)", opacity: 1 }]],
+      fundido: [[{ transform: "translateY(0px)", opacity: 1 }, { transform: "translateY(-12px)", opacity: 0 }],
+                [{ transform: "translateY(12px)", opacity: 0 }, { transform: "translateY(0px)", opacity: 1 }]]
+    }[modo];
+    const a1 = Lfrom.animate(K[0], { duration: 480, easing: "cubic-bezier(.55,0,.8,.2)", fill: "forwards" });
+    const a2 = Lto.animate(K[1], { duration: 620, delay: 80, easing: "cubic-bezier(.15,.8,.25,1)", fill: "backwards" });
+    enCurso = [a1, a2];
+    a1.finished.catch(() => {}).then(() => { ocultar(); a1.cancel(); });
+  }
+
+  function ir(id) {
+    if (!ESC[id] || id === actual) return;
+    try { if (location.hash !== "#" + id) location.hash = id; } catch (e) { /* sin hash */ }
+    mostrar(id);
+  }
+  function mover(d) {
+    const v = visibles(), k = v.indexOf(actual), dest = v[k + d];
+    if (dest) ir(dest);
+  }
+
+  window.addEventListener("hashchange", () => {
+    const id = decodeURIComponent(location.hash.slice(1));
+    if (ESC[id]) mostrar(id);
+  });
+  $("atras").addEventListener("click", () => { const p = actual && ESC[actual].padre; if (p) ir(p); });
+  $("ant").addEventListener("click", () => mover(-1));
+  $("sig").addEventListener("click", () => mover(1));
+
+  const svg = $("lienzo");
+  svg.addEventListener("click", ev => {
+    const n = ev.target.closest && ev.target.closest(".node");
+    if (!n) return;
+    if (n.dataset.entra) ir(n.dataset.entra);
+    else destacarFicha(n.dataset.id);
+  });
+  svg.addEventListener("keydown", ev => {
+    if (ev.key !== "Enter" && ev.key !== " ") return;
+    const n = ev.target.closest && ev.target.closest(".node.go");
+    if (!n) return;
+    ev.preventDefault();
+    ir(n.dataset.entra);
+  });
+  document.addEventListener("keydown", ev => {
+    if (ev.altKey || ev.ctrlKey || ev.metaKey) return;
+    if (ev.target.closest && ev.target.closest("input, textarea, select")) return;
+    if (ev.key === "ArrowRight") mover(1);
+    else if (ev.key === "ArrowLeft") mover(-1);
+    else if (ev.key === "Escape" && actual && ESC[actual].padre) ir(ESC[actual].padre);
+  });
+
+  const inicial = decodeURIComponent(location.hash.slice(1));
+  mostrar(ESC[inicial] ? inicial : "casa", true);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (actual) ajustar(capas[actual]); });
+})();
+</script>
+</html>
