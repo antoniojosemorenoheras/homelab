@@ -4,3 +4,10 @@
 id_rsa*
 id_ed25519*
 secretos/
+
+# Capturas de tráfico: son privadas
+*.pcap
+*.pcapng
+
+# Archivos del sistema de macOS
+.DS_Store
