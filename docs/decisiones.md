@@ -32,3 +32,22 @@
 **Consecuencias:**
 - Gano: máquinas virtuales y contenedores LXC en un solo equipo, snapshots, copias de seguridad con vzdump y gestión desde el navegador, sin pagar licencias.
 - Pierdo: todo depende de un único equipo con hardware antiguo, y tengo que aprender a administrar Proxmox, que lleva su tiempo y dedicación.
+
+## D-003 · No tener el laboratorio encendido 24/7
+
+- **Fecha:** noviembre de 2026
+- **Estado:** aceptada
+
+**Contexto:** el laboratorio con proxmox está en mi cuarto y por la noche duerme toda la familia y yo en el propio cuarto. Un equipo encendido todo el día hace ruido y a mi me resulta molesto, gasta luz y no necesito 
+que todo el tiempo este encendido, solo cuando estoy trabajando con él.
+
+**Decisión:** Proxmox se va a encender solo cuando lo necesito, mediante Wake on LAN. Pero mediante Wake on LAN solo puedo encenderlo si estoy en la casa y si quiero encenderlo desde fuera de la casa
+necesito que haya un dispositivo encendido 24/7 que ya esta decidido como lo voy a hacer (ver D-006).
+
+**Alternativas descartadas:**
+- Tenerlo encendido 24/7. Lo he descartado por el ruido por la noche para dormir y por el consumo innecesario.
+- Encenderlo y apagarlo a una hora fija con `rtcwake`. Para el laboratorio Proxmox lo he descartado porque estaría encendido aunque no lo usara, por lo que encenderlo cuando me haga falta es justo lo que necesito.
+
+**Consecuencias:**
+- Gano: menos ruido durante las horas que no debe de haber ruido, menos consumo que si estuviera todo el día arrancado y menos desgaste del equipo.
+- Pierdo: lo que uso en el laboratorio no está siempre disponible. Por eso todo lo que tiene que estar siempre encendido va en otro equipo o puedo acceder a otro equipo que esta encendido 24/7 para desde el encender Proxmox.
