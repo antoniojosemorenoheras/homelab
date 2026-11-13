@@ -7,3 +7,4 @@ Administro la red de mi casa como si fuera la de una pequeña empresa: organizad
 
 - [Plan de direccionamiento](docs/02-plan-de-red.md)
 - [Registro de decisiones](docs/decisiones.md)
+- [Qué se publica y qué no](docs/00-que-se-publica.md)
