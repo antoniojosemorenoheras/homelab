@@ -51,3 +51,20 @@ necesito que haya un dispositivo encendido 24/7 que ya esta decidido como lo voy
 **Consecuencias:**
 - Gano: menos ruido durante las horas que no debe de haber ruido, menos consumo que si estuviera todo el día arrancado y menos desgaste del equipo.
 - Pierdo: lo que uso en el laboratorio no está siempre disponible. Por eso todo lo que tiene que estar siempre encendido va en otro equipo o puedo acceder a otro equipo que esta encendido 24/7 para desde el encender Proxmox.
+
+## D-004 · Separar lo que se publica de lo privado
+
+- **Fecha:** noviembre de 2026
+- **Estado:** aceptada
+
+**Contexto:** el repositorio es público para todo el mundo porque quiero enseñarlo en mi currículum, pero documenta la red de mi casa. Si lo publico todo en este repositorio, le estoy dando a un atacante la topología, las versiones y los puntos de entrada. Sería ponérselo muy fácil al atacante por lo que he decidido lo siguiente:
+
+**Decisión:** publico la arquitectura, los rangos de IP privadas y las decisiones que son cosas que no comprometen la red, y guardo en `secretos/` (que no se sube a github) todo lo que permitiría atacar la red: IP pública, dominios, puertos expuestos, claves, MACs e inventario. Las reglas de como voy a publicar el contenido y como actúo si fuera comprometido están en `docs/00-que-se-publica.md`.
+
+**Alternativas descartadas:**
+- Hacer el repositorio privado. Lo descarté porque entonces no serviría para enseñarlo y si no puedo enseñarlo, pierde mucho valor un proyecto tan largo.
+- Publicarlo todo. Lo descarté porque facilitaría un ataque a la red de mi casa y no quiero que la información personal de mi familia sea comprometida.
+
+**Consecuencias:**
+- Gano: el proyecto lo puedo enseñar sin poner en riesgo la red.
+- Pierdo: tengo que revisar cada commit antes de subirlo y mantener la carpeta `secretos/` con su propia copia de seguridad, porque no está en GitHub. Tengo que llevar a cabo una subida de contenido más revisada para no subir nada equivocado que comprometa los equipos o la red.
